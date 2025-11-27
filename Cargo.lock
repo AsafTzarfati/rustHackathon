@@ -175,6 +175,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "dashmap 6.1.0",
+ "futures",
  "serde",
  "serde_json",
  "shared",
@@ -512,13 +513,16 @@ name = "frontend"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "futures",
  "gloo-net 0.5.0",
  "leptos",
  "leptos_router",
+ "prost",
  "serde",
  "serde_json",
  "shared",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 

@@ -119,7 +119,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_round_trip() {
+    fn test_round_trip_heartbeat() {
         let msg = proto::Heartbeat {
             header: None,
             node_id: "test_node".to_string(),
@@ -140,5 +140,65 @@ mod tests {
         } else {
             panic!("Wrong message type decoded");
         }
+    }
+
+    #[test]
+    fn test_round_trip_sensor_batch() {
+        let msg = proto::SensorBatch {
+            header: None,
+            readings: vec![
+                proto::SensorReading {
+                    sensor_id: "s1".to_string(),
+                    scalar: 12.34,
+                    ..Default::default()
+                }
+            ],
+        };
+        let wrapper = MessageWrapper::SensorBatch(msg.clone());
+        
+        let bytes = wrapper.to_bytes().expect("Failed to encode");
+        assert_eq!(bytes[0], MessageWrapper::ID_SENSOR_BATCH);
+        
+        let decoded = MessageWrapper::from_bytes(&bytes).expect("Failed to decode");
+        
+        if let MessageWrapper::SensorBatch(decoded_msg) = decoded {
+            assert_eq!(decoded_msg.readings.len(), 1);
+            assert_eq!(decoded_msg.readings[0].sensor_id, "s1");
+            assert_eq!(decoded_msg.readings[0].scalar, 12.34);
+        } else {
+            panic!("Wrong message type decoded");
+        }
+    }
+
+    #[test]
+    fn test_empty_buffer() {
+        let bytes: Vec<u8> = vec![];
+        let result = MessageWrapper::from_bytes(&bytes);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Buffer is empty"));
+    }
+
+    #[test]
+    fn test_unknown_id() {
+        let bytes: Vec<u8> = vec![255, 1, 2, 3]; // 255 is likely not a valid ID
+        let result = MessageWrapper::from_bytes(&bytes);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Unknown message ID"));
+    }
+
+    #[test]
+    fn test_malformed_payload() {
+        // ID 1 is SensorBatch, but payload is garbage
+        let bytes: Vec<u8> = vec![MessageWrapper::ID_SENSOR_BATCH, 0xFF, 0xFF]; 
+        // Protobuf decoding might fail or succeed with default values depending on the garbage.
+        // But 0xFF 0xFF is likely invalid field tag/wire type.
+        // Actually, protobuf is quite resilient, but let's try to feed it something that should fail or just produce partial data.
+        // A better test for "malformed" might be just checking it returns an error on truly invalid structure if possible,
+        // or just that it doesn't panic.
+        let result = MessageWrapper::from_bytes(&bytes);
+        // It's acceptable if it returns an error OR a message with default values (if bytes happen to be valid proto).
+        // But we want to ensure it handles it gracefully.
+        // Let's just assert it doesn't panic.
+        let _ = result; 
     }
 }

@@ -30,3 +30,14 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 prompts.md
+
+# Wasm / Trunk
+.trunk/
+pkg/
+
+# OS
+Thumbs.db
+
+# Agent
+.gemini/
+.agent/

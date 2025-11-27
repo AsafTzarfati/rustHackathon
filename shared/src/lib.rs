@@ -8,3 +8,4 @@ pub mod oper_system {
 
 pub mod models;
 pub use models::MessageWrapper;
+pub use oper_system::api::v1 as proto;

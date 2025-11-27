@@ -1,68 +1,55 @@
 use leptos::*;
-use gloo_net::websocket::{futures::WebSocket, Message};
-use futures::{StreamExt, SinkExt};
-use shared::proto::{ActuatorCommand, actuator_command::Command};
+use crate::services::websocket::WebSocketService;
+use crate::components::{
+    sensor_display::SensorDisplay,
+    system_status::SystemStatusPanel,
+    control_panel::ControlPanel,
+};
+use shared::{MessageWrapper, proto::{SensorBatch, SystemStatus}};
 
 #[component]
 pub fn Dashboard() -> impl IntoView {
-    // State for sensor data
-    let (sensor_data, set_sensor_data) = create_signal(String::from("Waiting for data..."));
-    let (ws_sender, set_ws_sender) = create_signal::<Option<futures::channel::mpsc::Sender<String>>>(None);
-    
-    // WebSocket connection
-    create_effect(move |_| {
-        let location = web_sys::window().unwrap().location();
-        let protocol = if location.protocol().unwrap() == "https:" { "wss" } else { "ws" };
-        let host = location.host().unwrap();
-        let ws_url = format!("{}://{}/ws", protocol, host);
-        
-        spawn_local(async move {
-            if let Ok(ws) = WebSocket::open(&ws_url) {
-                let (mut write, mut read) = ws.split();
-                let (tx, mut rx) = futures::channel::mpsc::channel::<String>(10);
-                set_ws_sender.set(Some(tx));
+    // Signals for state
+    let (connected, set_connected) = create_signal(false);
+    let (sensor_data, set_sensor_data) = create_signal::<Option<SensorBatch>>(None);
+    let (system_status, set_system_status) = create_signal::<Option<SystemStatus>>(None);
 
-                spawn_local(async move {
-                    while let Some(msg) = rx.next().await {
-                        let _ = write.send(Message::Text(msg)).await;
-                    }
-                });
-
-                while let Some(msg) = read.next().await {
-                    if let Ok(Message::Text(text)) = msg {
-                        set_sensor_data.set(text);
-                    }
-                }
-            }
-        });
+    // WebSocket Service
+    let ws_service = WebSocketService::new(move |msg| {
+        match msg {
+            MessageWrapper::SensorBatch(batch) => set_sensor_data.set(Some(batch)),
+            MessageWrapper::SystemStatus(status) => set_system_status.set(Some(status)),
+            MessageWrapper::Heartbeat(_) => set_connected.set(true), // Assume heartbeat means connected
+            _ => leptos::logging::log!("Received other message: {:?}", msg),
+        }
     });
 
-    let send_command = move |_| {
-        if let Some(mut tx) = ws_sender.get() {
-            spawn_local(async move {
-                let cmd = ActuatorCommand {
-                    header: None,
-                    actuator_id: "test_actuator".to_string(),
-                    command: Some(Command::Value(1.0)),
-                    params: std::collections::HashMap::new(),
-                };
-                if let Ok(json) = serde_json::to_string(&cmd) {
-                    let _ = tx.try_send(json);
-                }
-            });
-        }
-    };
+    // Handle sending commands
+    let send_command = Callback::new(move |cmd: MessageWrapper| {
+        ws_service.send(cmd);
+    });
+
+    // Effect to check connection (simple timeout logic could be added here)
+    create_effect(move |_| {
+        // Initial connection check or periodic ping could go here
+    });
 
     view! {
-        <div class="dashboard">
-            <h1>"Simulation Dashboard"</h1>
-            <div class="controls">
-                <button on:click=send_command>"Send Test Command"</button>
-            </div>
-            <div class="sensor-data">
-                <h2>"Latest Data"</h2>
-                <pre>{move || sensor_data.get()}</pre>
-            </div>
+        <div class="dashboard-container">
+            <header>
+                <h1>"Simulation Dashboard"</h1>
+            </header>
+            
+            <main class="dashboard-grid">
+                <div class="left-panel">
+                    <SystemStatusPanel status=system_status connected=connected />
+                    <ControlPanel on_command=send_command />
+                </div>
+                
+                <div class="right-panel">
+                    <SensorDisplay data=sensor_data />
+                </div>
+            </main>
         </div>
     }
 }

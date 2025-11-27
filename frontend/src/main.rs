@@ -1,5 +1,6 @@
 mod app;
 mod components;
+mod services;
 
 use app::App;
 use leptos::*;
