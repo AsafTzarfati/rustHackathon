@@ -38,6 +38,10 @@ pub fn Dashboard() -> impl IntoView {
         <div class="dashboard-container">
             <header>
                 <h1>"Simulation Dashboard"</h1>
+                // Placeholder for potential header actions or status summary
+                <div class="header-actions">
+                    // Could add theme toggle or connection status summary here
+                </div>
             </header>
             
             <main class="dashboard-grid">

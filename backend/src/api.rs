@@ -6,7 +6,7 @@ use axum::{
     Router,
 };
 use futures::{sink::SinkExt, stream::StreamExt};
-use shared::MessageWrapper;
+
 use tracing::{error, info};
 
 pub fn app_router(state: AppState) -> Router {

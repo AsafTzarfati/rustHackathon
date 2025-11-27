@@ -16,11 +16,11 @@ pub fn SensorDisplay(
                             {batch.readings.into_iter().map(|reading| {
                                 view! {
                                     <div class="sensor-item">
-                                        <span class="sensor-id">{reading.sensor_id}</span>
+                                        <div class="sensor-header">
+                                            <span class="sensor-id">{reading.sensor_id}</span>
+                                        </div>
                                         <span class="sensor-value">{format!("{:.2}", reading.scalar)}</span>
-
                                         <span class="sensor-unit">{reading.units}</span>
-
                                     </div>
                                 }
                             }).collect::<Vec<_>>()}

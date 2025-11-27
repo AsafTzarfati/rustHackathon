@@ -22,7 +22,9 @@ pub fn ControlPanel(
         <div class="control-panel card">
             <h2>"Controls"</h2>
             <div class="button-group">
-                <button class="btn primary" on:click=send_test_command>"Send Test Command"</button>
+                <button class="btn primary" on:click=send_test_command>
+                    "Send Test Command"
+                </button>
                 // Add more controls here as needed
             </div>
         </div>
