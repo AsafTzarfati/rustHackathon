@@ -12,3 +12,4 @@ chrono = { version = "0.4", features = ["serde"] }
 
 [build-dependencies]
 prost-build = "0.13"
+protobuf-src = "1.1"
