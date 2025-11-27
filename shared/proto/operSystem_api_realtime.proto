@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package operSystem.api.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+// QoS profile
+enum Reliability { RELIABILITY_UNSPECIFIED = 0; RELIABLE = 1; BEST_EFFORT = 2; }
+enum Durability { DURABILITY_UNSPECIFIED = 0; VOLATILE = 1; TRANSIENT_LOCAL = 2; }
+
+message QosProfile { Reliability reliability = 1; Durability durability = 2; uint32 depth = 3; bool history_keep_all = 4; }
+
+message Header { string source = 1; string dest = 2; uint64 seq = 3; google.protobuf.Timestamp timestamp = 4; string frame_id = 5; QosProfile qos = 6; }
+
+// ===== Extended sensor types (from embedded file) =====
+message Pose6DOF { repeated double position = 1; repeated double orientation = 2; }
+message Velocity6DOF { repeated double linear = 1; repeated double angular = 2; }
+message TemperatureData { double ambient = 1; double cpu = 2; double board = 3; }
+message GuidanceData { double heading_deg = 1; double pitch_deg = 2; double roll_deg = 3; double yaw_rate_deg_s = 4; }
+message SpeedData { double linear_speed_mps = 1; double angular_speed_rps = 2; }
+
+// ===== Real-time execution metrics =====
+message ExecutionWindow {
+  uint64 cycle_id = 1;                        // monotonically increasing cycle
+  google.protobuf.Timestamp start_time = 2;   // wall clock start
+  google.protobuf.Timestamp end_time = 3;     // wall clock end
+  google.protobuf.Duration scheduled_period = 4; // expected period
+}
+
+message RealTimeMetrics {
+  ExecutionWindow window = 1;
+  uint32 loop_rate_hz = 2;                    // configured/control loop rate
+  uint64 calc_duration_us = 3;                // duration of computation in microseconds
+  uint64 jitter_us = 4;                       // |actual_period - scheduled_period| in microseconds
+  uint64 deadline_miss_count = 5;             // cumulative since start
+  uint64 max_calc_duration_us = 6;            // rolling max over window
+  uint64 min_calc_duration_us = 7;            // rolling min over window
+  uint64 avg_calc_duration_us = 8;            // rolling average over window
+  uint64 message_latency_us = 9;              // end-to-end messaging latency estimate
+  bool overrun = 10;                          // calc_duration > scheduled_period
+}
+
+// ===== Hardware-specific additions =====
+message HardwareMetrics { double cpu_load_percent = 1; double memory_usage_mb = 2; TemperatureData temperature = 3; }
+message IOStatus { bool uart_ok = 1; bool spi_ok = 2; bool can_ok = 3; map<string, bool> gpio_states = 4; }
+message PowerStatus { double voltage_v = 1; double current_a = 2; double soc_percent = 3; }
+message HardwareSelfTestResult { string component_id = 1; bool passed = 2; string details = 3; }
+
+message HardwareStatus {
+  Header header = 1;
+  HardwareMetrics metrics = 2;
+  IOStatus io_status = 3;
+  PowerStatus power = 4;
+  repeated HardwareSelfTestResult self_tests = 5;
+  RealTimeMetrics rt = 6;                     // real-time loop metrics for the hardware node
+}
+
+message SensorReading {
+  enum Type { TYPE_UNSPECIFIED = 0; SCALAR = 1; VECTOR = 2; IMAGE = 3; BINARY = 4; POSE_6DOF = 5; VELOCITY_6DOF = 6; TEMPERATURE = 7; GUIDANCE = 8; SPEED = 9; }
+  string sensor_id = 1;
+  Type type = 2;
+  double scalar = 3;
+  repeated double vector = 4;
+  bytes data = 5;
+  string units = 6;
+  map<string, string> metadata = 7;
+  Pose6DOF pose = 8;
+  Velocity6DOF velocity = 9;
+  TemperatureData temperature = 10;
+  GuidanceData guidance = 11;
+  SpeedData speed = 12;
+}
+
+message SensorBatch { Header header = 1; repeated SensorReading readings = 2; }
+
+message ActuatorCommand { Header header = 1; string actuator_id = 2; oneof command { double position = 10; double velocity = 11; double torque = 12; bool on = 13; double value = 14; } map<string, double> params = 15; }
+
+message SystemStatus {
+  enum State { STATE_UNSPECIFIED = 0; INIT = 1; READY = 2; RUNNING = 3; PAUSED = 4; ERROR = 5; SHUTDOWN = 6; }
+  Header header = 1;
+  State state = 2;
+  string detail = 3;
+  map<string, double> metrics = 4; // generic numeric metrics
+  RealTimeMetrics rt = 5;          // real-time loop metrics for the system as a whole
+}
+
+message SimulationState { enum Phase { PHASE_UNSPECIFIED = 0; LOADING = 1; READY = 2; RUNNING = 3; PAUSED = 4; COMPLETED = 5; } Header header = 1; Phase phase = 2; double sim_time_sec = 3; bool running = 4; string scene = 5; double time_scale = 6; }
+
+message ClockModulation { Header header = 1; double time_scale = 2; uint32 max_tick_hz = 3; bool enable = 4; }
+
+message FaultInjection { enum Severity { SEVERITY_UNSPECIFIED = 0; LOW = 1; MEDIUM = 2; HIGH = 3; CRITICAL = 4; } Header header = 1; string fault_id = 2; Severity severity = 3; string target = 4; string description = 5; double start_time_sec = 6; double duration_sec = 7; map<string, double> parameters = 8; }
+
+message TimeSync { Header header = 1; google.protobuf.Timestamp host_time = 2; uint64 monotonic_nanos = 3; }
+
+message Heartbeat { Header header = 1; string node_id = 2; string status = 3; uint32 uptime_sec = 4; }
+
+message Stimulus { string name = 1; ActuatorCommand command = 2; google.protobuf.Duration delay = 3; }
+
+message Expectation { string name = 1; string sensor_id = 2; enum Relation { RELATION_UNSPECIFIED = 0; EQ = 1; LT = 2; GT = 3; NEAR = 4; } Relation relation = 3; double value = 4; double tolerance = 5; }
+
+message TestCase { Header header = 1; string test_id = 2; string description = 3; map<string, string> metadata = 4; repeated Stimulus stimuli = 5; repeated Expectation expectations = 6; uint32 timeout_ms = 7; }
+
+message AssertionResult { string name = 1; bool passed = 2; string details = 3; }
+
+message TestResult { Header header = 1; string test_id = 2; enum Verdict { VERDICT_UNSPECIFIED = 0; PASS = 1; FAIL = 2; ERROR = 3; SKIPPED = 4; } Verdict verdict = 3; repeated AssertionResult assertions = 4; string artifact_uri = 5; }
+
+message Ack { bool ok = 1; string message = 2; uint64 seq = 3; }
+
+service OperSystemInbound {
+  rpc PublishSensorData (SensorBatch) returns (Ack);
+  rpc PublishSystemStatus (SystemStatus) returns (Ack);
+  rpc PublishHardwareStatus (HardwareStatus) returns (Ack);
+  rpc PushClockModulation (ClockModulation) returns (Ack);
+  rpc StartTest (TestCase) returns (Ack);
+  rpc StopTest (TestCase) returns (Ack);
+}
+
+service OperSystemOutbound {
+  rpc PublishSimulationState (SimulationState) returns (Ack);
+  rpc ReturnTestResult (TestResult) returns (Ack);
+  rpc TimeSynchronize (TimeSync) returns (Ack);
+  rpc ReportFault (FaultInjection) returns (Ack);
+  rpc SendActuatorCommand (ActuatorCommand) returns (Ack);
+  rpc HeartbeatPing (Heartbeat) returns (Ack);
+}
